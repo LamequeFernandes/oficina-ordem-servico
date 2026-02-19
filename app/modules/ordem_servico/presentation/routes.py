@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.dependencies import obter_admin_logado, obter_usuario_logado, obter_cliente_logado
+from app.core.dependencies import obter_admin_logado, obter_id_usuario_logado, obter_usuario_logado, obter_cliente_logado
 from app.modules.ordem_servico.application.use_cases import (
     CriarOrdemServicoUseCase,
     ConsultarOrdemServicoUseCase,
@@ -88,12 +88,10 @@ def atualizar_status_ordem_servico(
     veiculo_id: int,
     ordem_servico_id: int,
     ordem_servico_data: OrdemServicoAlteracaoStatusInputDTO,
-    administrador=Depends(obter_admin_logado),
+    usuario_id = Depends(obter_id_usuario_logado),
     db: Session = Depends(get_db),
 ):
-    use_case = AlterarStatusOrdemServicoUseCase(
-        db, administrador
-    )
+    use_case = AlterarStatusOrdemServicoUseCase(db)
     return use_case.execute(ordem_servico_id, ordem_servico_data.status)
 
 

@@ -40,9 +40,8 @@ class CriarOrdemServicoUseCase:
 
 
 class AlterarStatusOrdemServicoUseCase:
-    def __init__(self, db: Session, funcionario_logado: UsuarioModel):
+    def __init__(self, db: Session):
         self.repo = OrdemServicoRepository(db)
-        self.funcionario_logado = funcionario_logado
 
     def validar_mudanca_para_aguardando_aprovacao(self, status_novo: StatusOrdemServico, ordem_servico: OrdemServico):
         if status_novo == StatusOrdemServico.AGUARDANDO_APROVACAO:
