@@ -15,6 +15,14 @@ from app.modules.ordem_servico.infrastructure.repositories import (
 )
 from app.core.exceptions import OrdemServicoNotFoundError, StatusOSInvalido
 
+from app.core.utils import (
+    adicionar_em_fila_execucao,
+    iniciar_diagnostico_fila_execucao,
+    finalizar_diagnostico_fila_execucao,
+    iniciar_execucao_fila_execucao,
+    finalizar_execucao_fila_execucao,
+)
+
 
 class CriarOrdemServicoUseCase:
     def __init__(self, db: Session, cliente_logado: ClienteModel):
@@ -35,13 +43,15 @@ class CriarOrdemServicoUseCase:
             observacoes=dados.observacoes,
         )
         ordem_servico_salva = self.repo.salvar(ordem_servico)
+        adicionar_em_fila_execucao(ordem_servico_salva.ordem_servico_id)
 
         return OrdemServicoMapper.entity_to_output_dto(ordem_servico_salva)
 
 
 class AlterarStatusOrdemServicoUseCase:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, usuario_id: int):
         self.repo = OrdemServicoRepository(db)
+        self.usuario_id = usuario_id
 
     def validar_mudanca_para_aguardando_aprovacao(self, status_novo: StatusOrdemServico, ordem_servico: OrdemServico):
         if status_novo == StatusOrdemServico.AGUARDANDO_APROVACAO:
@@ -105,6 +115,7 @@ class AlterarStatusOrdemServicoUseCase:
             ordem_servico.status = status.value  # type: ignore
             ordem_servico.dta_finalizacao = datetime.now()  # type: ignore
             ordem_servico_atualizada = self.repo.alterar(ordem_servico)
+            finalizar_execucao_fila_execucao(ordem_servico_id, "Reparo finalizado, ordem de serviço entregue ao cliente.")
         else:
             ordem_servico_atualizada = self.repo.alterar_status(
                 ordem_servico_id, status
@@ -112,6 +123,17 @@ class AlterarStatusOrdemServicoUseCase:
 
         if not ordem_servico_atualizada:
             raise OrdemServicoNotFoundError
+        
+        if status == StatusOrdemServico.EM_DIAGNOSTICO:
+            iniciar_diagnostico_fila_execucao(ordem_servico_id, self.usuario_id)
+        
+        if status == StatusOrdemServico.AGUARDANDO_APROVACAO:
+            finalizar_diagnostico_fila_execucao(ordem_servico_id, "Diagnóstico concluído, aguardando aprovação do cliente.")
+
+        if status == StatusOrdemServico.EM_EXECUCAO:
+            iniciar_execucao_fila_execucao(ordem_servico_id, self.usuario_id)
+        
+
         return OrdemServicoMapper.entity_to_output_dto(
             ordem_servico_atualizada
         )

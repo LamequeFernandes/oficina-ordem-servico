@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     PASSWORD_TEST_USER: str | None = None
     JWT_ISSUER: str
     JWT_AUDIENCE: str
+    URL_API_EXECUCAO: str
 
 
 settings = Settings()  # type: ignore

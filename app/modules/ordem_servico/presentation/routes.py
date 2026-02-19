@@ -91,7 +91,7 @@ def atualizar_status_ordem_servico(
     usuario_id = Depends(obter_id_usuario_logado),
     db: Session = Depends(get_db),
 ):
-    use_case = AlterarStatusOrdemServicoUseCase(db)
+    use_case = AlterarStatusOrdemServicoUseCase(db, usuario_id)
     return use_case.execute(ordem_servico_id, ordem_servico_data.status)
 
 
