@@ -1,6 +1,7 @@
 from sqlalchemy.exc import IntegrityError
 
 import requests
+from requests import RequestException
 
 import re
 
@@ -24,57 +25,99 @@ def obter_valor_e_key_duplicado_integrity_error(e: IntegrityError):
 
 
 def obter_item_fila_execucao(ordem_servico_id: int):
-    response = requests.get(f"{settings.URL_API_EXECUCAO}/fila-execucao/ordem-servico/{ordem_servico_id}")
+    try:
+        response = requests.get(
+            f"{settings.URL_API_EXECUCAO}/fila-execucao/ordem-servico/{ordem_servico_id}",
+            timeout=5,
+        )
+    except RequestException:
+        return None
+
     if response.status_code == 200:
-        return response.json()
+        try:
+            return response.json()
+        except ValueError:
+            return None
     return None
 
 
 def adicionar_em_fila_execucao(ordem_servico_id: int, prioridade: str = "NORMAL"):
-    requests.post(
-        f"{settings.URL_API_EXECUCAO}/fila-execucao",
-        json={
-            "ordem_servico_id": ordem_servico_id,
-            "prioridade": prioridade
-        }
-    )
+    try:
+        requests.post(
+            f"{settings.URL_API_EXECUCAO}/fila-execucao",
+            json={
+                "ordem_servico_id": ordem_servico_id,
+                "prioridade": prioridade
+            },
+            timeout=5,
+        )
+    except RequestException:
+        return None
 
 
 def iniciar_diagnostico_fila_execucao(ordem_servico_id: int, mecanico_responsavel_id: int):
-    item_fila = obter_item_fila_execucao(ordem_servico_id)  
-    requests.post(
-        f"{settings.URL_API_EXECUCAO}/fila-execucao/{item_fila['fila_id']}/iniciar-diagnostico",
-        json={
-            "mecanico_responsavel_id": mecanico_responsavel_id
-        }
-    )
+    item_fila = obter_item_fila_execucao(ordem_servico_id)
+    if not item_fila or not item_fila.get('fila_id'):
+        return None
+
+    try:
+        requests.post(
+            f"{settings.URL_API_EXECUCAO}/fila-execucao/{item_fila['fila_id']}/iniciar-diagnostico",
+            json={
+                "mecanico_responsavel_id": mecanico_responsavel_id
+            },
+            timeout=5,
+        )
+    except RequestException:
+        return None
 
 
 def finalizar_diagnostico_fila_execucao(ordem_servico_id: int, diagnostico: str):
-    item_fila = obter_item_fila_execucao(ordem_servico_id)  
-    requests.post(
-        f"{settings.URL_API_EXECUCAO}/fila-execucao/{item_fila['fila_id']}/finalizar-diagnostico",
-        json={
-            "diagnostico": diagnostico
-        }
-    )
+    item_fila = obter_item_fila_execucao(ordem_servico_id)
+    if not item_fila or not item_fila.get('fila_id'):
+        return None
+
+    try:
+        requests.post(
+            f"{settings.URL_API_EXECUCAO}/fila-execucao/{item_fila['fila_id']}/finalizar-diagnostico",
+            json={
+                "diagnostico": diagnostico
+            },
+            timeout=5,
+        )
+    except RequestException:
+        return None
 
 
 def iniciar_execucao_fila_execucao(ordem_servico_id: int, mecanico_responsavel_id: int):
-    item_fila = obter_item_fila_execucao(ordem_servico_id)  
-    requests.post(
-        f"{settings.URL_API_EXECUCAO}/fila-execucao/{item_fila['fila_id']}/iniciar-reparo",
-        json={
-            "mecanico_responsavel_id": mecanico_responsavel_id
-        }
-    )
+    item_fila = obter_item_fila_execucao(ordem_servico_id)
+    if not item_fila or not item_fila.get('fila_id'):
+        return None
+
+    try:
+        requests.post(
+            f"{settings.URL_API_EXECUCAO}/fila-execucao/{item_fila['fila_id']}/iniciar-reparo",
+            json={
+                "mecanico_responsavel_id": mecanico_responsavel_id
+            },
+            timeout=5,
+        )
+    except RequestException:
+        return None
 
 
 def finalizar_execucao_fila_execucao(ordem_servico_id: int, observacoes_reparo: str):
-    item_fila = obter_item_fila_execucao(ordem_servico_id)  
-    requests.post(
-        f"{settings.URL_API_EXECUCAO}/fila-execucao/{item_fila['fila_id']}/finalizar-reparo",
-        json={
-            "observacoes_reparo": observacoes_reparo
-        }
-    )
+    item_fila = obter_item_fila_execucao(ordem_servico_id)
+    if not item_fila or not item_fila.get('fila_id'):
+        return None
+
+    try:
+        requests.post(
+            f"{settings.URL_API_EXECUCAO}/fila-execucao/{item_fila['fila_id']}/finalizar-reparo",
+            json={
+                "observacoes_reparo": observacoes_reparo
+            },
+            timeout=5,
+        )
+    except RequestException:
+        return None
