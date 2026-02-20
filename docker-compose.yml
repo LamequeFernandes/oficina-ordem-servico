@@ -9,7 +9,7 @@ services:
       - MYSQL_DATABASE=oficina_ordem_servico
       - MYSQL_ROOT_PASSWORD=mysqlPW
     ports:
-      - '3306:3306'
+      - '3310:3306'
     volumes:
       - mysql-volume:/var/lib/mysql
       - ./scripts:/docker-entrypoint-initdb.d
@@ -25,7 +25,7 @@ services:
       - USER_DB=lameque
       - PASSWORD_DB=lameque123
       - HOST_DB=db
-      - PORT_DB=3306
+      - PORT_DB=3310
       - DATABASE=oficina_ordem_servico
       - SECRET_KEY='fakerandomsecretkey'
       - ALGORITHM=HS256
