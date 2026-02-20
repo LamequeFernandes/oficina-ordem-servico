@@ -1,23 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: oficina-api
+  name: oficina-ordem-servico-api
   namespace: oficina
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: oficina-api
+      app: oficina-ordem-servico-api
   template:
     metadata:
       labels:
-        app: oficina-api
+        app: oficina-ordem-servico-api
     spec:
       containers:
         - name: api
-          image: lamequesao/oficina-api:latest
+          image: lamequesao/oficina-ordem-servico:latest
+          imagePullPolicy: Always
           ports:
-            - containerPort: 8000
+            - containerPort: 8001
           env:
             - name: DD_AGENT_HOST
               valueFrom:
@@ -31,16 +32,16 @@ spec:
               value: "true"
           envFrom:
             - secretRef:
-                name: api-secrets
+                name: ordem-servico-secrets
           readinessProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: 8001
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
-              port: 8000
+              port: 8001
             initialDelaySeconds: 20
             periodSeconds: 20
