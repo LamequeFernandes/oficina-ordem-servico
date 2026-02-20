@@ -1,164 +1,178 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline - Ordem Servico
 
 on:
   push:
+    branches:
+      - main
   pull_request:
-    branches: 
+    branches:
       - main
     types:
       - closed
 
 jobs:
   build-and-test:
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-latest
 
     services:
       mysql:
-        image: mysql:8
+        image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: oficina_test
+          MYSQL_DATABASE: oficina_ordem_servico_test
         ports:
           - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping -h localhost -proot"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
-          
+          --health-retries=10
+
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt 
-        pip install pytest pytest-cov pymysql coverage
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov coverage
 
-    - name: Wait for MySQL to be ready
-      run: |
-        for i in {1..30}; do
-          if mysqladmin ping -h 127.0.0.1 -proot --silent; then
-            echo "MySQL is up"
-            break
-          fi
-          echo "Waiting for MySQL..."
-          sleep 2
-        done
+      - name: Wait for MySQL to be ready
+        run: |
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -proot --silent; then
+              echo "MySQL is up"
+              break
+            fi
+            echo "Waiting for MySQL... ($i/30)"
+            sleep 2
+          done
 
-    - name: Initialize schema
-      run: mysql -h 127.0.0.1 -uroot -proot oficina_test < ${{ github.workspace }}/scripts/create_db_oficina.sql
+      - name: Initialize Database
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot oficina_ordem_servico_test < scripts/create_db_ordem_servico.sql || echo "Schema init skipped"
 
-    - name: Run tests with coverage
-      env:
-        USER_DB: root
-        PASSWORD_DB: root
-        HOST_DB: 127.0.0.1
-        PORT_DB: 3306
-        DATABASE: oficina_test
-        SECRET_KEY: test_secret_key
-        ALGORITHM: HS256
-      run: |
-        pytest --cov=./ --cov-report=xml --cov-report=html --cov-fail-under=80 --maxfail=1 --disable-warnings -q
+      - name: Run tests with coverage
+        env:
+          USER_DB: root
+          PASSWORD_DB: root
+          HOST_DB: 127.0.0.1
+          PORT_DB: 3306
+          DATABASE: oficina_ordem_servico_test
+          SECRET_KEY: test_secret_key
+          ALGORITHM: HS256
+          JWT_ISSUER: oficina-auth
+          JWT_AUDIENCE: oficina-api
+        run: |
+          pytest --cov=app --cov-report=xml --cov-report=html --cov-fail-under=80 --maxfail=1 --disable-warnings -q
 
-    - name: Upload coverage report
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: htmlcov/
-        retention-days: 30
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 30
 
-    - name: Check coverage
-      run: |
-        # Extrai a porcentagem de cobertura do arquivo XML
-        COVERAGE_PERCENT=$(python -c "
-        import xml.etree.ElementTree as ET
-        tree = ET.parse('coverage.xml')
-        root = tree.getroot()
-        coverage = root.attrib['line-rate']
-        print(f'{float(coverage)*100:.2f}%')
-        ")
-        echo "Coverage: $COVERAGE_PERCENT"
-        
-        # Verifica se a cobertura é pelo menos 80%
-        python -c "
-        import xml.etree.ElementTree as ET
-        tree = ET.parse('coverage.xml')
-        root = tree.getroot()
-        coverage = float(root.attrib['line-rate'])
-        print(f'Coverage: {coverage*100:.2f}%')
-        if coverage < 0.8:
-            print('ERROR: Coverage below 80%')
-            exit(1)
-        else:
-            print('SUCCESS: Coverage meets 80% requirement')
-        "
+      - name: Check coverage
+        run: |
+          COVERAGE_PERCENT=$(python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          coverage = root.attrib['line-rate']
+          print(f'{float(coverage)*100:.2f}%')
+          ")
+          echo "Coverage: $COVERAGE_PERCENT"
 
-    # BUILD AND PUSH DOCKER IMAGE
-    - name: Build Docker image
-      run: docker build -t lamequesao/oficina-api:${{ github.sha }} .
+          python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          coverage = float(root.attrib['line-rate'])
+          print(f'Coverage: {coverage*100:.2f}%')
+          if coverage < 0.8:
+              print('ERROR: Coverage below 80%')
+              exit(1)
+          else:
+              print('SUCCESS: Coverage meets 80% requirement')
+          "
 
-    - name: Push to Docker Hub
-      run: |
-        echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u lamequesao --password-stdin
-        docker push lamequesao/oficina-api:${{ github.sha }}
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/oficina-ordem-servico:${{ github.sha }} .
+          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/oficina-ordem-servico:${{ github.sha }} ${{ secrets.DOCKERHUB_USERNAME }}/oficina-ordem-servico:latest
+
+      - name: Push to Docker Hub
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/oficina-ordem-servico:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/oficina-ordem-servico:latest
 
   deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
+
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-    - name: Update kubeconfig
-      run: aws eks update-kubeconfig --name oficina-fase3-eks --region us-east-1
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
 
-    - name: Create Namespace
-      run: |
-        kubectl apply -f k8s/namespace.yaml
+      - name: Create Namespace
+        run: kubectl apply -f k8s/namespace.yaml
 
-    - name: Substitute Env Variables in Secret and Apply
-      run: |
-        sed -i "s|<USER_DB>|${{ secrets.DB_USERNAME }}|g" k8s/secret.yaml
-        sed -i "s|<PASSWORD_DB>|${{ secrets.DB_PASSWORD }}|g" k8s/secret.yaml
-        sed -i "s|<HOST_DB>|${{ secrets.RDS_ENDPOINT }}|g" k8s/secret.yaml
-        sed -i "s|<PORT_DB>|3306|g" k8s/secret.yaml
-        sed -i "s|<DATABASE>|oficina_fase1|g" k8s/secret.yaml
-        sed -i "s|<SECRET_KEY>|${{ secrets.SECRET_KEY }}|g" k8s/secret.yaml
-        sed -i "s|<ALGORITHM>|HS256|g" k8s/secret.yaml
-        sed -i "s|<JWT_ISSUER>|oficina-auth|g" k8s/secret.yaml
-        sed -i "s|<JWT_AUDIENCE>|oficina-api|g" k8s/secret.yaml
-        kubectl apply -f k8s/secret.yaml
-        kubectl apply -f k8s/deployment.yaml -n oficina
-        kubectl apply -f k8s/service.yaml -n oficina
+      - name: Substitute Env Variables in Secret and Apply
+        run: |
+          sed -i "s|<USER_DB>|${{ secrets.USER_DB }}|g" k8s/secret.yaml
+          sed -i "s|<PASSWORD_DB>|${{ secrets.PASSWORD_DB }}|g" k8s/secret.yaml
+          sed -i "s|<HOST_DB>|${{ secrets.HOST_DB }}|g" k8s/secret.yaml
+          sed -i "s|<PORT_DB>|3306|g" k8s/secret.yaml
+          sed -i "s|<DATABASE>|oficina_ordem_servico|g" k8s/secret.yaml
+          sed -i "s|<SECRET_KEY>|${{ secrets.SECRET_KEY }}|g" k8s/secret.yaml
+          sed -i "s|<ALGORITHM>|HS256|g" k8s/secret.yaml
+          sed -i "s|<JWT_ISSUER>|oficina-auth|g" k8s/secret.yaml
+          sed -i "s|<JWT_AUDIENCE>|oficina-api|g" k8s/secret.yaml
+          sed -i "s|<URL_API_EXECUCAO>|${{ secrets.URL_API_EXECUCAO }}|g" k8s/secret.yaml
 
-    - name: Verify Deployment
-      run: |
-        # Aguarda até 5 minutos pelo deployment ficar pronto
-        kubectl rollout status deployment/oficina-api -n oficina --timeout=300s
-        
-        # Mostra status final
-        echo "=== PODS ==="
-        kubectl get pods -n oficina
-        
-        echo "=== SERVICES ==="
-        kubectl get svc -n oficina
-        
-        echo "=== ENDPOINT ==="
-        kubectl get svc oficina-api -n oficina -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+          kubectl apply -f k8s/secret.yaml -n oficina
+          kubectl apply -f k8s/deployment.yaml -n oficina
+          kubectl apply -f k8s/service.yaml -n oficina
+          kubectl apply -f k8s/hpa.yaml -n oficina
 
-    - name: Notify Deployment Success
-      run: echo "Deployment to Kubernetes cluster 'oficina-fase3-eks' completed successfully."
+      - name: Update image to current commit
+        run: |
+          kubectl set image deployment/oficina-ordem-servico-api api=${{ secrets.DOCKERHUB_USERNAME }}/oficina-ordem-servico:${{ github.sha }} -n oficina
+
+      - name: Verify Deployment
+        run: |
+          kubectl rollout status deployment/oficina-ordem-servico-api -n oficina --timeout=300s
+
+          echo "=== PODS ==="
+          kubectl get pods -n oficina
+
+          echo "=== SERVICES ==="
+          kubectl get svc -n oficina
+
+          echo "=== ENDPOINT ==="
+          kubectl get svc oficina-ordem-servico-api-service -n oficina -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+      - name: Notify Deployment Success
+        run: echo "Deployment to Kubernetes cluster completed successfully."
