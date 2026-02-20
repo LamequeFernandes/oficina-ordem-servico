@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-ordem-servico-api
+  namespace: oficina
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oficina-ordem-servico-api
+  template:
+    metadata:
+      labels:
+        app: oficina-ordem-servico-api
+    spec:
+      containers:
+        - name: api
+          image: lamequesao/oficina-ordem-servico:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8001
+          env:
+            - name: DD_AGENT_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DD_SERVICE
+              value: "oficina-api"
+            - name: DD_ENV
+              value: "fase3"
+            - name: DD_LOGS_INJECTION
+              value: "true"
+          envFrom:
+            - secretRef:
+                name: ordem-servico-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 20
+            periodSeconds: 20

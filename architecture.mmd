@@ -1,0 +1,218 @@
+graph TB
+    subgraph "CLIENT LAYER"
+        Browser[fa:fa-globe Browser<br/>Web Application]
+        Mobile[fa:fa-mobile Mobile App<br/>iOS/Android]
+        Postman[fa:fa-flask Postman<br/>API Testing]
+    end
+
+    subgraph "AUTHENTICATION SERVICE"
+        Lambda[fa:fa-bolt AWS Lambda<br/>Auth Service<br/>JWT Generation]
+    end
+
+    subgraph "KUBERNETES CLUSTER - EKS"
+        subgraph "LOAD BALANCER"
+            LB[fa:fa-balance-scale AWS Load Balancer<br/>Type: LoadBalancer<br/>Port: 80 -> 8000<br/>Health Checks]
+        end
+
+        subgraph "NAMESPACE: oficina"
+            subgraph "PODS - oficina-api"
+                subgraph "POD 1"
+                    subgraph "PRESENTATION LAYER"
+                        FastAPI1[fa:fa-server FastAPI App<br/>main.py<br/>Port: 8000]
+                        
+                        Routes1[fa:fa-route API Routes<br/>- /usuarios<br/>- /clientes<br/>- /funcionarios<br/>- /veiculos<br/>- /pecas<br/>- /servicos<br/>- /orcamentos<br/>- /ordens]
+                        
+                        Middleware1[Middleware<br/>- CORS<br/>- JWT Validation<br/>- Exception Handlers<br/>- JSON Logging]
+                    end
+
+                    subgraph "APPLICATION LAYER"
+                        UseCases1[fa:fa-cogs Use Cases<br/>Business Logic<br/>- CriarVeiculo<br/>- CriarOrcamento<br/>- CriarOrdemServico]
+                        
+                        DTOs1[fa:fa-exchange DTOs<br/>Data Transfer Objects<br/>Request/Response Models]
+                        
+                        Interfaces1[fa:fa-plug Interfaces<br/>Abstract Repositories<br/>Dependency Injection]
+                    end
+
+                    subgraph "DOMAIN LAYER"
+                        Entities1[fa:fa-cube Entities<br/>Business Objects<br/>- Veiculo<br/>- Orcamento<br/>- OrdemServico<br/>- Cliente<br/>- Funcionario]
+                        
+                        Rules1[fa:fa-check Business Rules<br/>Validations<br/>Domain Logic]
+                    end
+
+                    subgraph "INFRASTRUCTURE LAYER"
+                        Repos1[fa:fa-database Repositories<br/>SQLAlchemy<br/>Database Access]
+                        
+                        Models1[fa:fa-table ORM Models<br/>SQLAlchemy Models<br/>Database Mapping]
+                        
+                        Mappers1[fa:fa-arrows Mappers<br/>Entity <-> Model<br/>Conversion Logic]
+                    end
+
+                    subgraph "CORE LAYER"
+                        Config1[fa:fa-cog Config<br/>Environment Variables<br/>Settings]
+                        
+                        DB1[fa:fa-plug Database Connection<br/>SQLAlchemy Session<br/>Connection Pool]
+                        
+                        Security1[fa:fa-lock Security<br/>JWT Validation<br/>Auth Dependencies]
+                    end
+                end
+
+                Pod2[fa:fa-cube POD 2<br/>Same Structure<br/>Load Balanced]
+                Pod3[fa:fa-cube POD 3<br/>Same Structure<br/>Load Balanced]
+            end
+
+            HPA[fa:fa-expand Horizontal Pod Autoscaler<br/>Min: 2, Max: 10<br/>Target CPU: 70%<br/>Auto Scaling]
+
+            Secrets[fa:fa-key Kubernetes Secrets<br/>- DB_HOST<br/>- DB_PASSWORD<br/>- JWT_SECRET<br/>Base64 Encoded]
+
+            ConfigMaps[fa:fa-file-code ConfigMaps<br/>- APP_ENV<br/>- LOG_LEVEL<br/>- CORS_ORIGINS]
+        end
+    end
+
+    subgraph "DATABASE LAYER - AWS RDS"
+        RDS[(fa:fa-database MySQL 8.0<br/>oficina_db<br/>Managed Service)]
+        
+        subgraph "DATABASE SCHEMA"
+            TableClientes[(fa:fa-table clientes<br/>- id PK<br/>- cpf UNIQUE<br/>- nome<br/>- email<br/>- ativo)]
+            
+            TableFuncionarios[(fa:fa-table funcionarios<br/>- id PK<br/>- cpf UNIQUE<br/>- nome<br/>- email<br/>- ativo)]
+            
+            TableVeiculos[(fa:fa-table veiculos<br/>- id PK<br/>- placa<br/>- modelo<br/>- ano<br/>- cliente_id FK)]
+            
+            TablePecas[(fa:fa-table pecas<br/>- id PK<br/>- nome<br/>- preco<br/>- estoque)]
+            
+            TableServicos[(fa:fa-table servicos<br/>- id PK<br/>- nome<br/>- preco<br/>- tempo_estimado)]
+            
+            TableOrcamentos[(fa:fa-table orcamentos<br/>- id PK<br/>- valor_total<br/>- status<br/>- veiculo_id FK)]
+            
+            TableOrdens[(fa:fa-table ordens_servico<br/>- id PK<br/>- status<br/>- data_inicio<br/>- data_fim<br/>- orcamento_id FK)]
+        end
+    end
+
+    subgraph "OBSERVABILITY"
+        Datadog[fa:fa-chart-line Datadog APM<br/>- Distributed Tracing<br/>- Performance Metrics<br/>- Error Tracking]
+        
+        CloudWatch[fa:fa-chart-bar CloudWatch<br/>- Container Logs<br/>- Application Logs<br/>- Metrics & Alarms]
+        
+        Prometheus[fa:fa-chart-area Prometheus<br/>- Custom Metrics<br/>- Future Integration]
+    end
+
+    subgraph "CI/CD PIPELINE"
+        GitHub[fa:fa-github GitHub Actions<br/>Workflow<br/>Triggered on Push]
+        
+        subgraph "PIPELINE STAGES"
+            Tests[fa:fa-flask Run Tests<br/>pytest<br/>Coverage Report]
+            
+            Build[fa:fa-docker Build Docker Image<br/>docker build<br/>Tag: latest]
+            
+            Push[fa:fa-cloud Push to Registry<br/>Docker Hub<br/>seu-usuario/oficina-api]
+            
+            Deploy[fa:fa-rocket Deploy to EKS<br/>kubectl apply<br/>Rolling Update]
+            
+            Health[fa:fa-heartbeat Health Checks<br/>Verify Deployment<br/>Readiness Probes]
+        end
+    end
+
+    subgraph "CONTAINER REGISTRY"
+        DockerHub[fa:fa-docker Docker Hub<br/>Container Images<br/>oficina-api:latest<br/>oficina-api:v1.0.0]
+    end
+
+    %% Client Flow
+    Browser -->|HTTPS Request| LB
+    Mobile -->|HTTPS Request| LB
+    Postman -->|HTTPS Request| LB
+    
+    %% Authentication Flow
+    Browser -->|POST /auth| Lambda
+    Lambda -->|JWT Token| Browser
+    Browser -->|Bearer Token| LB
+    
+    %% Load Balancer to Pods
+    LB -->|Distribute Traffic| FastAPI1
+    LB -->|Distribute Traffic| Pod2
+    LB -->|Distribute Traffic| Pod3
+    
+    %% Internal Pod Flow
+    FastAPI1 --> Middleware1
+    Middleware1 --> Routes1
+    Routes1 --> UseCases1
+    UseCases1 --> DTOs1
+    DTOs1 --> Interfaces1
+    Interfaces1 --> Entities1
+    Entities1 --> Rules1
+    Rules1 --> Repos1
+    Repos1 --> Models1
+    Models1 --> Mappers1
+    
+    %% Core Dependencies
+    Repos1 --> DB1
+    Routes1 --> Security1
+    FastAPI1 --> Config1
+    
+    %% Secrets and Config
+    FastAPI1 -->|Read| Secrets
+    FastAPI1 -->|Read| ConfigMaps
+    
+    %% Database Connection
+    DB1 -->|SQL Queries| RDS
+    RDS --> TableClientes
+    RDS --> TableFuncionarios
+    RDS --> TableVeiculos
+    RDS --> TablePecas
+    RDS --> TableServicos
+    RDS --> TableOrcamentos
+    RDS --> TableOrdens
+    
+    %% Auto Scaling
+    HPA -->|Monitors & Scales| FastAPI1
+    HPA -->|Monitors & Scales| Pod2
+    HPA -->|Monitors & Scales| Pod3
+    
+    %% Observability
+    FastAPI1 -.->|Send Traces| Datadog
+    FastAPI1 -.->|Send Logs| CloudWatch
+    Pod2 -.->|Send Logs| CloudWatch
+    Pod3 -.->|Send Logs| CloudWatch
+    FastAPI1 -.->|Export Metrics| Prometheus
+    
+    %% CI/CD Flow
+    GitHub -->|Trigger| Tests
+    Tests -->|Pass| Build
+    Build -->|Create Image| Push
+    Push -->|Upload| DockerHub
+    Push -->|Deploy| Deploy
+    Deploy -->|Update| FastAPI1
+    Deploy -->|Update| Pod2
+    Deploy -->|Update| Pod3
+    Deploy -->|Verify| Health
+    
+    %% Container Registry
+    FastAPI1 -.->|Pull Image| DockerHub
+    Pod2 -.->|Pull Image| DockerHub
+    Pod3 -.->|Pull Image| DockerHub
+
+    %% Styling
+    classDef client fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
+    classDef auth fill:#FFA726,stroke:#EF6C00,stroke-width:2px,color:#fff
+    classDef k8s fill:#326CE5,stroke:#1A4D9F,stroke-width:2px,color:#fff
+    classDef presentation fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    classDef application fill:#03A9F4,stroke:#0277BD,stroke-width:2px,color:#fff
+    classDef domain fill:#00BCD4,stroke:#00838F,stroke-width:2px,color:#fff
+    classDef infrastructure fill:#009688,stroke:#00695C,stroke-width:2px,color:#fff
+    classDef core fill:#4DB6AC,stroke:#00796B,stroke-width:2px,color:#fff
+    classDef database fill:#673AB7,stroke:#4527A0,stroke-width:2px,color:#fff
+    classDef monitoring fill:#FF5722,stroke:#D84315,stroke-width:2px,color:#fff
+    classDef cicd fill:#28A745,stroke:#1E7E34,stroke-width:2px,color:#fff
+    classDef registry fill:#2196F3,stroke:#0D47A1,stroke-width:2px,color:#fff
+    
+    class Browser,Mobile,Postman client
+    class Lambda auth
+    class LB,HPA,Secrets,ConfigMaps,Pod2,Pod3 k8s
+    class FastAPI1,Routes1,Middleware1 presentation
+    class UseCases1,DTOs1,Interfaces1 application
+    class Entities1,Rules1 domain
+    class Repos1,Models1,Mappers1 infrastructure
+    class Config1,DB1,Security1 core
+    class RDS,TableClientes,TableFuncionarios,TableVeiculos,TablePecas,TableServicos,TableOrcamentos,TableOrdens database
+    class Datadog,CloudWatch,Prometheus monitoring
+    class GitHub,Tests,Build,Push,Deploy,Health cicd
+    class DockerHub registry
